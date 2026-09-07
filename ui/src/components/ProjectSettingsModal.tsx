@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
 import { Link, LogOut, Settings, Trash2, UserPlus, X } from 'lucide-react';
 
 import { projectApi } from '../services/api';
@@ -7,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { AccessRequestList } from './AccessRequestList';
 import { permalinkFor } from '../hooks/useRoute';
 import { Project, ProjectDetail, ProjectRole } from '../types';
+import { errorFrom } from '../utils/errors';
 
 interface ProjectSettingsModalProps {
   project: Project;
@@ -63,11 +63,6 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   const isOwner = detail?.my_role === 'owner';
   const ownerCount = detail?.members.filter((m) => m.role === 'owner').length ?? 0;
   const isLastOwner = isOwner && ownerCount <= 1;
-
-  const errorFrom = (err: unknown, fallback: string): string => {
-    const detailMessage = axios.isAxiosError(err) ? err.response?.data?.detail : undefined;
-    return detailMessage || fallback;
-  };
 
   const refresh = async () => {
     await load();

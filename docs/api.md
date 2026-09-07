@@ -12,6 +12,34 @@ Authentication is optional. When `ACCESS_TOKEN` is set, all API requests must in
 Authorization: Bearer <token>
 ```
 
+
+User PATs use the same header and start with `vvpat_`. They are scoped and may
+be used in OIDC or token mode. See [authentication.md](authentication.md) for
+the permission matrix.
+
+### Personal access tokens
+
+- `POST /api/auth/pats` — create a token; accepts `name`, `permissions`, and an
+  optional ISO-8601 `expires_at`; returns the raw `token` once.
+- `GET /api/auth/pats` — list the current user's token metadata, never secrets.
+- `PATCH /api/auth/pats/{token_id}` — rename an owned token and/or change its
+  expiry. Send only the fields to change; `"expires_at": null` removes the
+  expiry. Only active tokens can be edited (`409` for expired or revoked ones)
+  so an expired credential cannot be revived. Permissions are immutable.
+- `DELETE /api/auth/pats/{token_id}` — revoke an owned token.
+
+Tokens can only be created by and for the signed-in user; there is no way to
+mint a token on someone else's behalf. Administrators have interactive-only,
+cross-user review and revocation endpoints:
+
+- `GET /api/admin/pat-users` — server-side user search, returning at most 50 matches.
+- `GET /api/admin/pats` — paginated token metadata; supports `page`, `per_page`,
+  `user_id`, token `name`, and `status` (`active`, `expired`, or `revoked`).
+- `DELETE /api/admin/pats/{token_id}` — revoke any user's token.
+
+These management endpoints require interactive authentication and return `403`
+when called with a PAT. `expires_at`, wherever it is accepted, must lie in the
+future (`422` otherwise); timezone-aware values are stored as UTC.
 See [authentication.md](authentication.md) for details.
 
 ## Entries
@@ -333,13 +361,15 @@ The requester may ask again later.
 
 ## Admin
 
-Read-only platform statistics for the `/admin` dashboard. Who may call them
-depends on the auth mode: in `none` and `token` mode the single shared local
-user is the admin, so they are available without extra configuration — they
-only aggregate data that user can already read in full. In `oidc` mode they are
-restricted to users listed in the `ADMIN_EMAILS` environment variable, and
-changing that list requires an API restart. Callers who are not admins receive
-`404` rather than `403`, so the area stays undiscoverable.
+Platform statistics for the `/admin` dashboard, plus account activation and the
+cross-user token management listed under *Personal access tokens*. Who may call
+them depends on the auth mode: in `none` and `token` mode the single shared local
+user is the admin, so they are available without extra configuration. In `oidc`
+mode they are restricted to users listed in the `ADMIN_EMAILS` environment
+variable, and changing that list requires an API restart. Callers who are not
+admins receive `404` rather than `403`, so the area stays undiscoverable; this
+holds for a non-admin's PAT too, whatever its scopes. The read endpoints accept
+an admin's PAT carrying `admin:read`; the mutations require an interactive login.
 
 ### Platform statistics
 `GET /api/admin/stats`

@@ -43,6 +43,15 @@ class UserService:
     def get_by_email(self, email: str) -> User | None:
         return self.db.query(User).filter(User.email == email.strip().lower()).first()
 
+    def find_oidc_user(self, issuer: str, subject: str) -> User | None:
+        """Look up an OIDC identity without touching it (no last_login_at write)."""
+
+        return (
+            self.db.query(User)
+            .filter(User.issuer == issuer, User.subject == subject)
+            .first()
+        )
+
     def provision_oidc_user(
         self,
         issuer: str,
@@ -53,11 +62,7 @@ class UserService:
         """Find by (issuer, subject) or create; refresh email/name on every login."""
 
         normalized_email = email.strip().lower()
-        user = (
-            self.db.query(User)
-            .filter(User.issuer == issuer, User.subject == subject)
-            .first()
-        )
+        user = self.find_oidc_user(issuer, subject)
 
         if user:
             user.email = normalized_email

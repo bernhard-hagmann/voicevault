@@ -114,6 +114,36 @@ class OidcCallbackTests(IsolatedAsyncioTestCase):
         )
         db.rollback.assert_called_once()
 
+    @patch.object(auth_routes.settings, "auth_mode", AuthMode.OIDC)
+    @patch("app.api.routes.auth.UserService")
+    @patch("app.api.routes.auth.get_oauth")
+    async def test_deactivated_account_is_refused_before_provisioning(
+        self,
+        get_oauth_mock,
+        user_service_mock,
+    ):
+        get_oauth_mock.return_value.oidc.authorize_access_token = AsyncMock(
+            return_value={
+                "userinfo": {
+                    "iss": "https://idp.test",
+                    "sub": "u-inactive",
+                    "email": "alice@corp",
+                    "name": "Alice",
+                },
+            },
+        )
+        user_service_mock.return_value.find_oidc_user.return_value = SimpleNamespace(
+            id=uuid4(),
+            is_active=False,
+        )
+
+        response = await auth_routes.oidc_callback(self._request(), MagicMock())
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["location"], "/?auth_error=account_inactive")
+        # provisioning would have recorded a successful login (last_login_at)
+        user_service_mock.return_value.provision_oidc_user.assert_not_called()
+
     @patch.object(auth_routes.settings, "auth_mode", AuthMode.TOKEN)
     async def test_login_endpoint_404_outside_oidc_mode(self):
         from fastapi import HTTPException

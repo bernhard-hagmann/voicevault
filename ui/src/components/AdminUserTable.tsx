@@ -7,6 +7,7 @@ interface AdminUserTableProps {
   sort: AdminUserSort;
   order: 'asc' | 'desc';
   onSortChange: (sort: AdminUserSort, order: 'asc' | 'desc') => void;
+  onToggleActive?: (user: AdminUserStats) => void;
 }
 
 const COLUMNS: { key: AdminUserSort; label: string; numeric: boolean }[] = [
@@ -33,6 +34,7 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({
   sort,
   order,
   onSortChange,
+  onToggleActive,
 }) => {
   // Clicking the active column flips direction; a new column starts descending,
   // which is what you want for "who is consuming the most".
@@ -83,6 +85,12 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({
             >
               Errors
             </th>
+            <th
+              scope="col"
+              className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-gray-500"
+            >
+              Access
+            </th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -101,6 +109,11 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({
                       system
                     </span>
                   )}
+                  {user.is_active === false && (
+                    <span className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] uppercase text-red-700">
+                      inactive
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-gray-500">{user.email}</div>
               </td>
@@ -117,6 +130,18 @@ export const AdminUserTable: React.FC<AdminUserTableProps> = ({
               <td className="px-4 py-3 text-gray-500">{formatDate(user.created_at)}</td>
               <td className="px-4 py-3 text-right text-gray-500">
                 {formatCount(user.error_count)}
+              </td>
+              <td className="px-4 py-3 text-right">
+                {!user.is_system && onToggleActive && (
+                  <button
+                    onClick={() => onToggleActive(user)}
+                    className={
+                      user.is_active !== false ? 'text-sm text-red-600' : 'text-sm text-green-700'
+                    }
+                  >
+                    {user.is_active !== false ? 'Deactivate' : 'Activate'}
+                  </button>
+                )}
               </td>
             </tr>
           ))}

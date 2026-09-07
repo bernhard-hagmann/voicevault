@@ -128,6 +128,58 @@ export interface User {
   email: string;
   display_name: string;
   is_admin: boolean;
+  is_active?: boolean;
+}
+
+export type PATPermission =
+  | 'entries:read'
+  | 'entries:write'
+  | 'projects:read'
+  | 'projects:write'
+  | 'templates:read'
+  | 'templates:write'
+  | 'admin:read';
+
+export interface PersonalAccessToken {
+  id: string;
+  name: string;
+  token_prefix: string;
+  permissions: PATPermission[];
+  created_at: string;
+  expires_at: string | null;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+
+export interface PersonalAccessTokenCreated extends PersonalAccessToken {
+  token: string;
+}
+
+// Omitted fields are left unchanged; expires_at: null removes the expiry.
+export interface PersonalAccessTokenUpdate {
+  name?: string;
+  expires_at?: string | null;
+}
+
+export interface PATUser {
+  id: string;
+  email: string;
+  display_name: string;
+  is_active: boolean;
+}
+
+export interface AdminPersonalAccessToken extends PersonalAccessToken {
+  user: PATUser;
+}
+
+export type PATStatus = 'active' | 'expired' | 'revoked';
+
+export interface AdminPersonalAccessTokenList {
+  tokens: AdminPersonalAccessToken[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
 }
 
 export interface AdminSystemStats {
@@ -160,6 +212,7 @@ export interface AdminUserStats {
   email: string;
   display_name: string;
   is_admin: boolean;
+  is_active?: boolean;
   is_system: boolean;
   created_at: string | null;
   last_login_at: string | null;

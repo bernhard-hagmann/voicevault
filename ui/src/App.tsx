@@ -15,6 +15,7 @@ import { CreateProjectModal } from './components/CreateProjectModal';
 import { ProjectSettingsModal } from './components/ProjectSettingsModal';
 import { ProjectAccessRequest } from './components/ProjectAccessRequest';
 import { AdminDashboard } from './components/AdminDashboard';
+import { PersonalAccessTokenManager } from './components/PersonalAccessTokenManager';
 import { entryApi, projectApi } from './services/api';
 import { useAuth } from './context/AuthContext';
 import { useRoute } from './hooks/useRoute';
@@ -69,7 +70,7 @@ function App() {
   const fetchEntries = useCallback(
     async (currentPage: number = 1, append: boolean = false) => {
       // The admin view renders its own data; entries are irrelevant there.
-      if (view.kind === 'admin') {
+      if (view.kind === 'admin' || view.kind === 'tokens') {
         setLoading(false);
         return;
       }
@@ -393,7 +394,9 @@ function App() {
           />
         </aside>
         <main className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
-          {view.kind === 'admin' ? (
+          {view.kind === 'tokens' && user ? (
+            <PersonalAccessTokenManager currentUser={user} isAdmin={user.is_admin} />
+          ) : view.kind === 'admin' ? (
             <AdminDashboard />
           ) : isForeignProject && view.kind === 'project' ? (
             <ProjectAccessRequest

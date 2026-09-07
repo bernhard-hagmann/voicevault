@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatCount, formatHours } from './format';
+import { formatBytes, formatCount, formatDateTime, formatHours, formatRelative } from './format';
 
 describe('formatBytes', () => {
   it('renders zero and negatives as 0 B', () => {
@@ -59,5 +59,33 @@ describe('formatCount', () => {
   it('groups thousands', () => {
     expect(formatCount(1234567)).toBe('1,234,567');
     expect(formatCount(0)).toBe('0');
+  });
+});
+
+describe('formatRelative', () => {
+  const now = new Date('2026-09-07T12:00:00Z').getTime();
+
+  it('describes future and past instants', () => {
+    expect(formatRelative('2026-09-19T12:00:00Z', now)).toBe('in 12 days');
+    expect(formatRelative('2026-09-07T09:00:00Z', now)).toBe('3 hours ago');
+    expect(formatRelative('2027-09-07T12:00:00Z', now)).toBe('next year');
+  });
+
+  it('collapses sub-minute differences and rejects garbage', () => {
+    expect(formatRelative('2026-09-07T12:00:30Z', now)).toBe('just now');
+    expect(formatRelative('not a date', now)).toBe('');
+  });
+});
+
+describe('formatDateTime', () => {
+  it('matches the medium date / short time locale rendering', () => {
+    const iso = '2026-12-01T10:30:00Z';
+    expect(formatDateTime(iso)).toBe(
+      new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }),
+    );
+  });
+
+  it('renders garbage as an empty string', () => {
+    expect(formatDateTime('nope')).toBe('');
   });
 });

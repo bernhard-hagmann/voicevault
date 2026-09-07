@@ -41,3 +41,34 @@ export const formatHours = (seconds: number): string => {
 // Fixed locale so the output does not depend on the viewer's machine.
 export const formatCount = (value: number): string =>
   Number.isFinite(value) ? value.toLocaleString('en-US') : '0';
+
+const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
+  ['year', 365 * 24 * 3600 * 1000],
+  ['month', 30 * 24 * 3600 * 1000],
+  ['day', 24 * 3600 * 1000],
+  ['hour', 3600 * 1000],
+  ['minute', 60 * 1000],
+];
+
+// "in 12 days" / "3 hours ago" / "just now". Fixed locale, like formatCount.
+export const formatRelative = (iso: string, now: number = Date.now()): string => {
+  const delta = new Date(iso).getTime() - now;
+  if (!Number.isFinite(delta)) {
+    return '';
+  }
+  const formatter = new Intl.RelativeTimeFormat('en-US', { numeric: 'auto' });
+  for (const [unit, size] of RELATIVE_UNITS) {
+    if (Math.abs(delta) >= size) {
+      return formatter.format(Math.round(delta / size), unit);
+    }
+  }
+  return 'just now';
+};
+
+// Exact instant in the viewer's zone, e.g. "Dec 1, 2026, 10:30 AM".
+export const formatDateTime = (iso: string): string => {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+};

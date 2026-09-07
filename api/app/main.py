@@ -17,10 +17,11 @@ async def lifespan(app: FastAPI):
     """Handle startup and shutdown events"""
     # Startup
     try:
-        from app.db.database import Base, ensure_entry_schema
+        from app.db.database import Base, ensure_auth_schema, ensure_entry_schema
 
         Base.metadata.create_all(bind=engine)
         ensure_entry_schema()
+        ensure_auth_schema()
         db = SessionLocal()
         try:
             PromptTemplateService(db).seed_defaults_if_empty()

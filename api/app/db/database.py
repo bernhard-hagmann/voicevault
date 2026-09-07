@@ -79,6 +79,22 @@ def ensure_entry_schema() -> None:
             connection.execute(statement)
 
 
+def ensure_auth_schema() -> None:
+    """Add auth columns for installations that rely on create_all at startup."""
+
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    if "is_active" not in columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE users ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT true",
+                ),
+            )
+
+
 def get_db():
     db = SessionLocal()
     try:

@@ -3,6 +3,7 @@ import {
   FileText,
   User as UserIcon,
   Plus,
+  KeyRound,
   Settings,
   FolderOpen,
   Link,
@@ -112,10 +113,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         New Project
       </button>
 
+      <button
+        onClick={() => onSelectView({ kind: 'tokens' })}
+        className={`mt-4 ${itemClass(view.kind === 'tokens')}`}
+      >
+        <KeyRound className="h-4 w-4" />
+        API tokens
+      </button>
+
       {isAdmin && (
         <button
           onClick={() => onSelectView({ kind: 'admin' })}
-          className={`mt-4 ${itemClass(view.kind === 'admin')}`}
+          className={itemClass(view.kind === 'admin')}
         >
           <ShieldCheck className="h-4 w-4" />
           Admin

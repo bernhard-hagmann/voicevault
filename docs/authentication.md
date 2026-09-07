@@ -16,6 +16,59 @@ If `AUTH_MODE` is left **unset**, it is derived for backward compatibility:
 `token` when `ACCESS_TOKEN` is set, otherwise `none`. Existing deployments keep
 working with zero configuration changes.
 
+
+## Personal access tokens
+
+Signed-in users can create personal access tokens from **API tokens** in the
+left sidebar. A token is always minted for the signed-in user; administrators
+cannot create tokens on someone else's behalf. Active tokens can be renamed and
+their expiry changed or removed, but their permissions are fixed for life. The
+page lists active tokens by default; the status filter widens it to expired or
+revoked ones. Administrators additionally get a **My tokens / All tokens**
+switch and a user filter so they can review and revoke any token, paginated.
+The secret is shown once, together with a ready-to-run `curl` example;
+VoiceVault stores only its SHA-256 hash. Send it using the standard bearer
+format:
+
+```http
+Authorization: Bearer vvpat_<secret>
+```
+
+PATs identify their owning user, so entry ownership and project membership
+rules still apply. Each token also needs the permission required by the route:
+
+| Permission | Allows |
+|------------|--------|
+| `entries:read` | List/read entries, stream audio, and chat |
+| `entries:write` | Create, upload, update, archive, delete, move, and summarize entries |
+| `projects:read` | List and view projects and access requests |
+| `projects:write` | Create/update projects, membership, and access requests |
+| `templates:read` | List prompt templates |
+| `templates:write` | Create, update, and delete prompt templates |
+| `admin:read` | Read admin endpoints, only when the owning user is also an admin |
+
+A missing, malformed, unknown, expired, or revoked PAT returns `401`. A valid
+PAT without the required permission returns `403`, except on `/api/admin`,
+where a non-admin's token receives `404` regardless of its scopes so the admin
+area stays undiscoverable. PATs may only call the routes listed above plus
+`GET /api/auth/me`; everything else (including every admin mutation and PAT
+management itself) requires an interactive browser login. Deactivating a user
+invalidates their sessions and revokes all of their PATs in one step, and a
+deactivated user's next SSO attempt is refused before it can be recorded as a
+login.
+
+`last_used_at` is updated at most every five minutes and only for requests that
+were actually authorized, so a leaked token that is being probed against routes
+it cannot access does not appear "in use".
+
+In OIDC mode a bearer header that does not start with `vvpat_` is ignored and
+the session cookie is used instead. This lets a browser that still holds a
+token-mode credential sign in with SSO; automation sending a wrong credential
+without a cookie still gets `401`.
+
+`AUTH_MODE=none` intentionally permits anonymous access, so PAT permissions do
+not provide a security boundary in that development mode. Use OIDC or token mode
+when the API must be protected.
 ## Token mode (`AUTH_MODE=token`)
 
 The token mode uses a **global access token** approach:

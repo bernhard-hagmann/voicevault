@@ -30,6 +30,7 @@ describe('Sidebar', () => {
     expect(screen.getByText('All Entries')).toBeInTheDocument();
     expect(screen.getByText('My Entries')).toBeInTheDocument();
     expect(screen.getByText('Team Alpha')).toBeInTheDocument();
+    expect(screen.getByText('API tokens')).toBeInTheDocument();
     expect(screen.getByText('owner')).toBeInTheDocument();
   });
 

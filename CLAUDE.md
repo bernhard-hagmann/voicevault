@@ -232,6 +232,11 @@ ACCESS_TOKEN=your_secure_token_here
 # Authorization: Bearer your_secure_token_here
 ```
 
+In `token` and `oidc` mode, users can additionally mint scoped personal access
+tokens (`vvpat_...`) for API clients - see `docs/authentication.md`. In `oidc`
+mode a bearer header that is not a PAT is ignored in favour of the session
+cookie, so a browser still carrying a token-mode credential can sign in.
+
 For `oidc` mode (per-user identities, session cookie, Projects sharing) see
 `docs/oidc-setup.md`.
 
@@ -365,15 +370,31 @@ Optional Bearer token authentication (`/api/app/api/routes/auth.py`):
 - `POST /api/projects/{id}/access-requests/{rid}/approve|deny` - Owner: decide, with a role
 - `GET /api/auth/config|me`, `POST /api/auth/logout`, `GET /api/auth/oidc/login|callback`
 
+### Personal Access Tokens
+Scoped bearer credentials (`Authorization: Bearer vvpat_...`) that act as their owning
+user in every auth mode. Managing them requires an interactive login (session or shared
+token), never a PAT. Scopes are derived from route prefix and verb in
+`app/core/auth.py` (`_PAT_SCOPES`); unmapped routes and every admin mutation are denied
+to PATs outright, so a new router must be added there before PATs can call it.
+- `POST /api/auth/pats` - Create for yourself (`name`, `permissions`, optional future `expires_at`); the secret is returned once. Nobody can mint a token for another user
+- `GET /api/auth/pats` - Own token metadata
+- `PATCH /api/auth/pats/{id}` - Rename / change expiry of an own active token (409 for expired or revoked; permissions are immutable)
+- `DELETE /api/auth/pats/{id}` - Revoke own token
+
 ### Admin
-Read-only. In `none`/`token` mode the single shared local user is the admin, so this
-works with no extra configuration - the endpoints only aggregate data that user can
-already read in full. In `oidc` mode the caller's email must appear in `ADMIN_EMAILS`
-(comma-separated); everyone else gets 404, never 403. Changing `ADMIN_EMAILS`
-requires an API restart.
+In `none`/`token` mode the single shared local user is the admin, so this works with no
+extra configuration. In `oidc` mode the caller's email must appear in `ADMIN_EMAILS`
+(comma-separated); everyone else gets 404, never 403 - including a non-admin's PAT,
+whatever its scopes. Changing `ADMIN_EMAILS` requires an API restart. The read
+endpoints accept an admin's PAT with `admin:read`; the mutations require an interactive
+login.
 - `GET /api/admin/stats` - Platform totals: users (total/active 30d/new 30d), entries by status and source, archived count, storage bytes, duration seconds, words, projects, `entries_missing_metrics`, `entries_unassigned`
 - `GET /api/admin/users` - Per-user consumption (`?skip=0&limit=50&sort=storage_bytes&order=desc`)
   - `sort`: `entry_count|storage_bytes|duration_seconds|word_count|email|created_at` (anything else returns 400)
+- `PATCH /api/admin/users/{id}/active` - Activate/deactivate; deactivating revokes the user's PATs and sessions in the same transaction
+- `GET /api/admin/pat-users?search=` - User search for the token page (LIKE metacharacters are matched literally)
+- `GET /api/admin/pats` - All tokens, paginated (`user_id`, `name`, `status=active|expired|revoked`)
+- `DELETE /api/admin/pats/{id}` - Revoke any user's token
 
 ### System
 - `GET /api/` - API info

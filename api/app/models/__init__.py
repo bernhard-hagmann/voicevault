@@ -1,6 +1,7 @@
 from app.models.entry import Entry, EntryStatus, SourceType
 from app.models.user import User
 from app.models.auth_session import AuthSession
+from app.models.personal_access_token import PersonalAccessToken
 from app.models.project import (
     AccessRequestStatus,
     Project,
@@ -16,6 +17,7 @@ __all__ = [
     "SourceType",
     "User",
     "AuthSession",
+    "PersonalAccessToken",
     "AccessRequestStatus",
     "Project",
     "ProjectAccessRequest",

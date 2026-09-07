@@ -41,7 +41,12 @@ class AdminEmailsSettingTests(TestCase):
 
 
 def make_user(email: str, is_system: bool = False) -> SimpleNamespace:
-    return SimpleNamespace(email=email, display_name="Ada", is_system=is_system)
+    return SimpleNamespace(
+        email=email,
+        display_name="Ada",
+        is_system=is_system,
+        is_active=True,
+    )
 
 
 class IsAdminEmailTests(TestCase):
@@ -154,6 +159,7 @@ class UserResponseAdminFlagTests(TestCase):
             id=uuid4(),
             email="ada@corp.com",
             display_name="Ada",
+            is_active=True,
         )
 
         with patch.object(auth_module, "settings", settings):
@@ -167,6 +173,7 @@ class UserResponseAdminFlagTests(TestCase):
             id=uuid4(),
             email="bob@corp.com",
             display_name="Bob",
+            is_active=True,
         )
 
         with patch.object(auth_module, "settings", settings):
@@ -181,6 +188,7 @@ class UserResponseAdminFlagTests(TestCase):
             email="local@voicevault.local",
             display_name="Local User",
             is_system=True,
+            is_active=True,
         )
 
         for mode in (AuthMode.NONE, AuthMode.TOKEN):
@@ -197,6 +205,7 @@ class UserResponseAdminFlagTests(TestCase):
             email="ada@corp.com",
             display_name="Ada",
             is_system=False,
+            is_active=True,
         )
 
         for mode in (AuthMode.NONE, AuthMode.TOKEN):

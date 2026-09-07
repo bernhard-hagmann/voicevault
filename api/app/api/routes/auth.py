@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse
 from loguru import logger
@@ -17,6 +19,14 @@ from app.core.config import settings
 from app.db.database import get_db
 from app.models.schemas import AuthConfigResponse, UserResponse
 from app.models.user import User
+from app.core.auth import require_interactive_auth
+from app.models.schemas import (
+    PersonalAccessTokenCreate,
+    PersonalAccessTokenCreated,
+    PersonalAccessTokenResponse,
+    PersonalAccessTokenUpdate,
+)
+from app.services.pat_service import PATNotEditable, PATService
 from app.services.oidc_service import OIDCError, extract_claims, get_oauth, redirect_uri
 from app.services.session_service import SESSION_COOKIE_NAME, SessionService
 from app.services.user_service import UserService
@@ -94,12 +104,64 @@ def build_user_response(user: User) -> UserResponse:
         email=user.email,
         display_name=user.display_name,
         is_admin=is_admin_user(user),
+        is_active=user.is_active,
     )
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
     return build_user_response(current_user)
+
+
+@router.post("/pats", response_model=PersonalAccessTokenCreated, status_code=201)
+async def create_pat(
+    data: PersonalAccessTokenCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_interactive_auth),
+):
+    pat, raw_token = PATService(db).create(
+        user_id=current_user.id,
+        name=data.name,
+        permissions=[permission.value for permission in data.permissions],
+        expires_at=data.expires_at,
+    )
+    return PersonalAccessTokenCreated.from_pat(pat, raw_token)
+
+
+@router.get("/pats", response_model=list[PersonalAccessTokenResponse])
+async def list_pats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_interactive_auth),
+):
+    return PATService(db).list_for_user(current_user.id)
+
+
+@router.patch("/pats/{token_id}", response_model=PersonalAccessTokenResponse)
+async def update_pat(
+    token_id: UUID,
+    data: PersonalAccessTokenUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_interactive_auth),
+):
+    """Rename or change the expiry of an own, active token."""
+
+    try:
+        pat = PATService(db).update(token_id, current_user.id, data.changes())
+    except PATNotEditable:
+        raise HTTPException(status_code=409, detail="Only active tokens can be edited")
+    if pat is None:
+        raise HTTPException(status_code=404, detail="Personal access token not found")
+    return pat
+
+
+@router.delete("/pats/{token_id}", status_code=204)
+async def revoke_pat(
+    token_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_interactive_auth),
+):
+    if not PATService(db).revoke(token_id, current_user.id):
+        raise HTTPException(status_code=404, detail="Personal access token not found")
 
 
 @router.post("/logout")
@@ -173,6 +235,15 @@ async def oidc_callback(request: Request, db: Session = Depends(get_db)):
         return _error_redirect(exc.code)
 
     user_service = UserService(db)
+    # Refuse before provisioning: provisioning records a successful login
+    # (last_login_at), which a deactivated account must not accumulate.
+    existing = user_service.find_oidc_user(identity["issuer"], identity["subject"])
+    if existing is not None and not existing.is_active:
+        logger.warning(
+            "authentication_failed reason=inactive_user user_id={}",
+            existing.id,
+        )
+        return _error_redirect("account_inactive")
     try:
         user = user_service.provision_oidc_user(
             issuer=identity["issuer"],
