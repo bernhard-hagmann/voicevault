@@ -18,5 +18,6 @@ class User(Base):
     email = Column(String(320), nullable=False, unique=True)  # stored lowercased
     display_name = Column(String(255), nullable=False)
     is_system = Column(Boolean, nullable=False, default=False)
+    is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, default=utcnow)
     last_login_at = Column(DateTime, nullable=True)

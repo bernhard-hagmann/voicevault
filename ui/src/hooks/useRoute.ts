@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 export type Route =
   | { kind: 'all' }
   | { kind: 'mine' }
+  | { kind: 'tokens' }
   | { kind: 'admin' }
   | { kind: 'project'; projectId: string };
 
@@ -10,6 +11,10 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const PROJECT_PATH = /^\/projects\/([^/]+)\/?$/;
 
 export const parsePath = (pathname: string): Route => {
+  if (pathname === '/tokens') {
+    return { kind: 'tokens' };
+  }
+
   if (pathname === '/mine') {
     return { kind: 'mine' };
   }
@@ -32,6 +37,8 @@ export const pathForRoute = (route: Route): string => {
   switch (route.kind) {
     case 'mine':
       return '/mine';
+    case 'tokens':
+      return '/tokens';
     case 'project':
       return `/projects/${route.projectId}`;
     case 'admin':

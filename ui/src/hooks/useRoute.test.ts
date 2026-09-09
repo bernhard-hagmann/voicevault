@@ -9,6 +9,10 @@ describe('parsePath', () => {
     expect(parsePath('/')).toEqual({ kind: 'all' });
   });
 
+  it('maps /tokens to the PAT management view', () => {
+    expect(parsePath('/tokens')).toEqual({ kind: 'tokens' });
+  });
+
   it('maps /mine to the personal view', () => {
     expect(parsePath('/mine')).toEqual({ kind: 'mine' });
   });
@@ -42,11 +46,8 @@ describe('pathForRoute', () => {
   it('round-trips every route kind', () => {
     expect(pathForRoute({ kind: 'all' })).toBe('/');
     expect(pathForRoute({ kind: 'mine' })).toBe('/mine');
+    expect(pathForRoute({ kind: 'tokens' })).toBe('/tokens');
     expect(pathForRoute({ kind: 'project', projectId: UUID })).toBe(`/projects/${UUID}`);
-    expect(pathForRoute({ kind: 'admin' })).toBe('/admin');
-  });
-
-  it('builds the admin path', () => {
     expect(pathForRoute({ kind: 'admin' })).toBe('/admin');
   });
 });

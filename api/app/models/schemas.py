@@ -2,10 +2,12 @@ import json
 
 from pydantic import BaseModel, Field, HttpUrl, computed_field, field_validator
 from typing import Any
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 from .entry import EntryStatus, SourceType
 from .project import AccessRequestStatus, ProjectRole
+from app.core.timeutils import UTCDatetime, utcnow
+from app.services.pat_service import PATPermission
 
 
 def _normalize_language(value: Any) -> Any:
@@ -122,8 +124,8 @@ class EntryResponse(BaseModel):
     additional_context: str | None = None
     language: str | None = None
     error_message: str | None = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
     class Config:
         from_attributes = True
@@ -180,7 +182,7 @@ class EntryList(BaseModel):
 class ChatMessage(BaseModel):
     role: str  # "user" or "assistant"
     content: str
-    timestamp: datetime | None = None
+    timestamp: UTCDatetime | None = None
 
 
 class ChatRequest(BaseModel):
@@ -190,12 +192,12 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     message: str
-    timestamp: datetime
+    timestamp: UTCDatetime
 
 
 class SummaryResponse(BaseModel):
     summary: str
-    timestamp: datetime
+    timestamp: UTCDatetime
 
 
 class PromptTemplateCreate(BaseModel):
@@ -221,8 +223,8 @@ class PromptTemplateResponse(BaseModel):
     body_markdown: str
     sort_order: int
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
     class Config:
         from_attributes = True
@@ -237,9 +239,136 @@ class UserResponse(BaseModel):
     email: str
     display_name: str
     is_admin: bool = False
+    is_active: bool = True
 
     class Config:
         from_attributes = True
+
+
+def _normalize_pat_name(value: str) -> str:
+    value = value.strip()
+    if not value:
+        raise ValueError("name cannot be blank")
+    return value
+
+
+def _normalize_pat_expiry(value: datetime | None) -> datetime | None:
+    """Normalize to naive UTC (how the database stores it) and reject the past."""
+
+    if value is None:
+        return None
+    if value.tzinfo is not None:
+        value = value.astimezone(timezone.utc).replace(tzinfo=None)
+    if value <= utcnow():
+        raise ValueError("expires_at must be in the future")
+    return value
+
+
+class PersonalAccessTokenCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    permissions: list[PATPermission] = Field(..., min_length=1)
+    expires_at: datetime | None = None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        return _normalize_pat_name(value)
+
+    @field_validator("permissions")
+    @classmethod
+    def unique_permissions(cls, value: list[PATPermission]) -> list[PATPermission]:
+        if len(value) != len(set(value)):
+            raise ValueError("permissions must not contain duplicates")
+        return value
+
+    @field_validator("expires_at")
+    @classmethod
+    def expires_in_the_future(cls, value: datetime | None) -> datetime | None:
+        return _normalize_pat_expiry(value)
+
+
+class PersonalAccessTokenUpdate(BaseModel):
+    """Rename and/or change expiry. Omitted fields are left alone; an explicit
+    ``"expires_at": null`` removes the expiry. Permissions are immutable: widening
+    a token's scope after the fact would defeat the point of scoping it."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    expires_at: datetime | None = None
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str | None) -> str | None:
+        return None if value is None else _normalize_pat_name(value)
+
+    @field_validator("expires_at")
+    @classmethod
+    def expires_in_the_future(cls, value: datetime | None) -> datetime | None:
+        return _normalize_pat_expiry(value)
+
+    def changes(self) -> dict:
+        """Only the fields the client actually sent."""
+
+        return self.model_dump(exclude_unset=True)
+
+
+class PersonalAccessTokenResponse(BaseModel):
+    id: UUID
+    name: str
+    token_prefix: str
+    permissions: list[PATPermission]
+    created_at: UTCDatetime
+    expires_at: UTCDatetime | None
+    last_used_at: UTCDatetime | None
+    revoked_at: UTCDatetime | None
+
+    class Config:
+        from_attributes = True
+
+
+class PersonalAccessTokenCreated(PersonalAccessTokenResponse):
+    token: str
+
+    @classmethod
+    def from_pat(cls, pat, token: str) -> "PersonalAccessTokenCreated":
+        """The one response that carries the secret; built from the ORM row plus the raw token."""
+
+        return cls(
+            **PersonalAccessTokenResponse.model_validate(pat).model_dump(),
+            token=token,
+        )
+
+
+class PATUserResponse(BaseModel):
+    id: UUID
+    email: str
+    display_name: str
+    is_active: bool
+
+    class Config:
+        from_attributes = True
+
+
+class AdminPersonalAccessTokenResponse(PersonalAccessTokenResponse):
+    user: PATUserResponse
+
+    @classmethod
+    def from_row(cls, pat, user) -> "AdminPersonalAccessTokenResponse":
+        return cls(
+            **PersonalAccessTokenResponse.model_validate(pat).model_dump(),
+            user=PATUserResponse.model_validate(user),
+        )
+
+
+class AdminPersonalAccessTokenListResponse(BaseModel):
+    tokens: list[AdminPersonalAccessTokenResponse]
+    total: int
+    page: int
+    per_page: int
+    total_pages: int
+
+
+class UserActivationUpdate(BaseModel):
+    is_active: bool
 
 
 class ProjectCreate(BaseModel):
@@ -273,8 +402,8 @@ class ProjectResponse(BaseModel):
     name: str
     description: str | None = None
     created_by: UUID
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
     my_role: ProjectRole
     member_count: int
     entry_count: int
@@ -319,8 +448,8 @@ class AccessRequestResponse(BaseModel):
     display_name: str
     status: AccessRequestStatus
     message: str | None = None
-    created_at: datetime
-    decided_at: datetime | None = None
+    created_at: UTCDatetime
+    decided_at: UTCDatetime | None = None
     decided_by_name: str | None = None
 
 
@@ -351,8 +480,9 @@ class AdminUserStatsResponse(BaseModel):
     display_name: str
     is_admin: bool
     is_system: bool
-    created_at: datetime | None
-    last_login_at: datetime | None
+    is_active: bool
+    created_at: UTCDatetime | None
+    last_login_at: UTCDatetime | None
     entry_count: int
     storage_bytes: int
     duration_seconds: float

@@ -160,6 +160,7 @@ class BuildUserStatsTests(TestCase):
             "email": "ada@corp.com",
             "display_name": "Ada",
             "is_system": False,
+            "is_active": True,
             "created_at": None,
             "last_login_at": None,
             "entry_count": 2,

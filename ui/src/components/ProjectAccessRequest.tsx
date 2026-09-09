@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
 import { FolderLock, Loader2 } from 'lucide-react';
 
 import { projectApi } from '../services/api';
 import { ProjectPreview } from '../types';
+import { errorFrom } from '../utils/errors';
 
 interface ProjectAccessRequestProps {
   projectId: string;
@@ -44,11 +44,6 @@ export const ProjectAccessRequest: React.FC<ProjectAccessRequestProps> = ({
       onAccessGranted();
     }
   }, [preview, onAccessGranted]);
-
-  const errorFrom = (err: unknown, fallback: string): string => {
-    const detail = axios.isAxiosError(err) ? err.response?.data?.detail : undefined;
-    return detail || fallback;
-  };
 
   const handleRequest = async () => {
     setIsSubmitting(true);

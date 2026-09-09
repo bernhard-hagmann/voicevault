@@ -276,6 +276,7 @@ friendly message for each code:
 | `token_exchange_failed` | The token endpoint was unreachable or rejected the code.          | Check network reachability, `OIDC_CLIENT_SECRET`, and clock skew. `OIDC_DISCOVERY_URL` must be reachable **from inside the API container** — `localhost` there is the container itself; use the compose service name (e.g. `http://keycloak:8080/...`). |
 | `missing_claim`         | A required claim (`iss`, subject, or email) was absent.           | Fix the `OIDC_CLAIM_*` mapping / issuance transform rules. |
 | `provisioning_failed`   | Creating the user collided with an existing one — usually the IdP account was re-created (new subject, same email). | Reconcile in the database: update the old user row's `issuer`/`subject` to the new values, or free up the email. |
+| `account_inactive`      | An administrator deactivated this account. The attempt is refused before it is recorded as a login. | Re-activate the user from the admin dashboard (`PATCH /api/admin/users/{id}/active`). |
 
 **Cookie is never set / you are bounced back to login:**
 - `SESSION_COOKIE_SECURE=true` on a plain-HTTP host — the browser drops the

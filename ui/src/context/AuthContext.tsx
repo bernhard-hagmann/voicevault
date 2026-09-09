@@ -24,6 +24,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const config = await authApi.getConfig();
       setMode(config.mode);
+      if (config.mode !== 'token') {
+        // A token left over from a previous AUTH_MODE would otherwise be sent
+        // as a bearer header on every request, including /auth/me.
+        auth.removeToken();
+      }
       try {
         setUser(await authApi.me());
       } catch {

@@ -25,6 +25,13 @@ import {
   AdminSystemStats,
   AdminUserList,
   AdminUserSort,
+  PATPermission,
+  PersonalAccessToken,
+  AdminPersonalAccessTokenList,
+  PATStatus,
+  PersonalAccessTokenCreated,
+  PersonalAccessTokenUpdate,
+  PATUser,
 } from '../types';
 
 const api = axios.create({
@@ -219,6 +226,32 @@ export const authApi = {
   logout: async (): Promise<void> => {
     await api.post('/auth/logout');
   },
+
+  listPATs: async (): Promise<PersonalAccessToken[]> => {
+    const response = await api.get('/auth/pats');
+    return response.data;
+  },
+
+  createPAT: async (data: {
+    name: string;
+    permissions: PATPermission[];
+    expires_at: string | null;
+  }): Promise<PersonalAccessTokenCreated> => {
+    const response = await api.post('/auth/pats', data);
+    return response.data;
+  },
+
+  updatePAT: async (
+    id: string,
+    changes: PersonalAccessTokenUpdate,
+  ): Promise<PersonalAccessToken> => {
+    const response = await api.patch(`/auth/pats/${id}`, changes);
+    return response.data;
+  },
+
+  revokePAT: async (id: string): Promise<void> => {
+    await api.delete(`/auth/pats/${id}`);
+  },
 };
 
 export const projectApi = {
@@ -320,9 +353,43 @@ export const adminApi = {
     });
     return response.data;
   },
+
+  setUserActive: async (id: string, isActive: boolean): Promise<User> => {
+    const response = await api.patch(`/admin/users/${id}/active`, { is_active: isActive });
+    return response.data;
+  },
+
+  getPATUsers: async (search: string): Promise<PATUser[]> => {
+    const response = await api.get('/admin/pat-users', { params: { search } });
+    return response.data;
+  },
+
+  getPATs: async (filters: {
+    userId?: string;
+    name?: string;
+    status?: PATStatus;
+    page?: number;
+    perPage?: number;
+  }): Promise<AdminPersonalAccessTokenList> => {
+    const response = await api.get('/admin/pats', {
+      params: {
+        user_id: filters.userId,
+        name: filters.name,
+        status: filters.status,
+        page: filters.page ?? 1,
+        per_page: filters.perPage ?? 25,
+      },
+    });
+    return response.data;
+  },
+
+  revokePAT: async (id: string): Promise<void> => {
+    await api.delete(`/admin/pats/${id}`);
+  },
 };
 
 // Auth helper functions
+
 export const auth = {
   setToken: (token: string) => {
     localStorage.setItem('auth_token', token);

@@ -13,6 +13,19 @@ describe('Login', () => {
     mockUseAuth.mockReset();
   });
 
+  it('explains a deactivated account instead of asking to retry', () => {
+    mockUseAuth.mockReturnValue({ mode: 'oidc', loginWithToken: vi.fn() });
+    window.history.pushState({}, '', '/?auth_error=account_inactive');
+
+    try {
+      render(<Login />);
+      expect(screen.getByText(/Your account has been deactivated/)).toBeInTheDocument();
+      expect(screen.queryByText(/Please try again/)).not.toBeInTheDocument();
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
   it('renders an SSO link in oidc mode', () => {
     mockUseAuth.mockReturnValue({ mode: 'oidc', loginWithToken: vi.fn() });
 

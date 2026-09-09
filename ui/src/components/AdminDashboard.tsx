@@ -5,6 +5,7 @@ import { adminApi } from '../services/api';
 import { AdminSystemStats, AdminUserList, AdminUserSort } from '../types';
 import { formatBytes, formatCount, formatHours } from '../utils/format';
 import { AdminUserTable } from './AdminUserTable';
+import { errorFrom } from '../utils/errors';
 
 const PAGE_SIZE = 50;
 
@@ -14,11 +15,6 @@ interface StatCardProps {
   value: string;
   hint?: string;
 }
-
-const errorFrom = (err: unknown, fallback: string): string => {
-  const detail = axios.isAxiosError(err) ? err.response?.data?.detail : undefined;
-  return detail || fallback;
-};
 
 // The admin endpoints answer 404 (not 403) for a non-admin, so a direct visit to
 // /admin has to read as "there is nothing here", not as a backend failure.
@@ -97,6 +93,26 @@ export const AdminDashboard: React.FC = () => {
   const handleSortChange = (nextSort: AdminUserSort, nextOrder: 'asc' | 'desc') => {
     setSort(nextSort);
     setOrder(nextOrder);
+  };
+
+  const handleToggleActive = async (user: AdminUserList['users'][number]) => {
+    const next = user.is_active === false;
+    if (!window.confirm(`${next ? 'Activate' : 'Deactivate'} ${user.email}?`)) return;
+    try {
+      await adminApi.setUserActive(user.id, next);
+      setUserList((current) =>
+        current
+          ? {
+              ...current,
+              users: current.users.map((item) =>
+                item.id === user.id ? { ...item, is_active: next } : item,
+              ),
+            }
+          : current,
+      );
+    } catch (err) {
+      setUsersError(errorFrom(err, 'Could not update account status.'));
+    }
   };
 
   if (notFound) {
@@ -235,6 +251,7 @@ export const AdminDashboard: React.FC = () => {
         sort={sort}
         order={order}
         onSortChange={handleSortChange}
+        onToggleActive={handleToggleActive}
       />
     </div>
   );

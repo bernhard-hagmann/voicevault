@@ -64,3 +64,15 @@ class SessionService:
             AuthSession.id == hash_session_token(token),
         ).delete(synchronize_session=False)
         self.db.commit()
+
+    def delete_all_for_user(self, user_id: UUID, *, commit: bool = True) -> int:
+        """Sign a user out everywhere. commit=False joins the caller's transaction."""
+
+        count = (
+            self.db.query(AuthSession)
+            .filter(AuthSession.user_id == user_id)
+            .delete(synchronize_session=False)
+        )
+        if commit:
+            self.db.commit()
+        return count

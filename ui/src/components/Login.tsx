@@ -11,6 +11,8 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
     'Sign-in succeeded but a required claim is missing. Ask your administrator to check the OIDC_CLAIM_* configuration.',
   provisioning_failed:
     'Your account could not be created because it conflicts with an existing user. Ask your administrator to resolve the conflict.',
+  account_inactive:
+    'Your account has been deactivated. Contact your administrator to restore access.',
 };
 
 const Shell: React.FC<{ subtitle: string; children: React.ReactNode }> = ({

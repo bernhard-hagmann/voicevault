@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
 import { Check, X } from 'lucide-react';
 
 import { projectApi } from '../services/api';
 import { AccessRequest, ProjectRole } from '../types';
+import { errorFrom } from '../utils/errors';
 
 interface AccessRequestListProps {
   projectId: string;
@@ -32,11 +32,6 @@ export const AccessRequestList: React.FC<AccessRequestListProps> = ({ projectId,
   useEffect(() => {
     load();
   }, [load]);
-
-  const errorFrom = (err: unknown, fallback: string): string => {
-    const detail = axios.isAxiosError(err) ? err.response?.data?.detail : undefined;
-    return detail || fallback;
-  };
 
   const decide = async (request: AccessRequest, approve: boolean) => {
     setError(null);
