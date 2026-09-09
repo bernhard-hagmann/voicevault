@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 from .entry import EntryStatus, SourceType
 from .project import AccessRequestStatus, ProjectRole
-from app.core.timeutils import utcnow
+from app.core.timeutils import UTCDatetime, utcnow
 from app.services.pat_service import PATPermission
 
 
@@ -124,8 +124,8 @@ class EntryResponse(BaseModel):
     additional_context: str | None = None
     language: str | None = None
     error_message: str | None = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
     class Config:
         from_attributes = True
@@ -182,7 +182,7 @@ class EntryList(BaseModel):
 class ChatMessage(BaseModel):
     role: str  # "user" or "assistant"
     content: str
-    timestamp: datetime | None = None
+    timestamp: UTCDatetime | None = None
 
 
 class ChatRequest(BaseModel):
@@ -192,12 +192,12 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     message: str
-    timestamp: datetime
+    timestamp: UTCDatetime
 
 
 class SummaryResponse(BaseModel):
     summary: str
-    timestamp: datetime
+    timestamp: UTCDatetime
 
 
 class PromptTemplateCreate(BaseModel):
@@ -223,8 +223,8 @@ class PromptTemplateResponse(BaseModel):
     body_markdown: str
     sort_order: int
     is_active: bool
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
 
     class Config:
         from_attributes = True
@@ -316,10 +316,10 @@ class PersonalAccessTokenResponse(BaseModel):
     name: str
     token_prefix: str
     permissions: list[PATPermission]
-    created_at: datetime
-    expires_at: datetime | None
-    last_used_at: datetime | None
-    revoked_at: datetime | None
+    created_at: UTCDatetime
+    expires_at: UTCDatetime | None
+    last_used_at: UTCDatetime | None
+    revoked_at: UTCDatetime | None
 
     class Config:
         from_attributes = True
@@ -402,8 +402,8 @@ class ProjectResponse(BaseModel):
     name: str
     description: str | None = None
     created_by: UUID
-    created_at: datetime
-    updated_at: datetime
+    created_at: UTCDatetime
+    updated_at: UTCDatetime
     my_role: ProjectRole
     member_count: int
     entry_count: int
@@ -448,8 +448,8 @@ class AccessRequestResponse(BaseModel):
     display_name: str
     status: AccessRequestStatus
     message: str | None = None
-    created_at: datetime
-    decided_at: datetime | None = None
+    created_at: UTCDatetime
+    decided_at: UTCDatetime | None = None
     decided_by_name: str | None = None
 
 
@@ -481,8 +481,8 @@ class AdminUserStatsResponse(BaseModel):
     is_admin: bool
     is_system: bool
     is_active: bool
-    created_at: datetime | None
-    last_login_at: datetime | None
+    created_at: UTCDatetime | None
+    last_login_at: UTCDatetime | None
     entry_count: int
     storage_bytes: int
     duration_seconds: float

@@ -60,6 +60,16 @@ const fillCreateForm = (name: string) => {
 describe('statusOf', () => {
   const now = new Date('2026-09-07T00:00:00Z').getTime();
 
+  it('reads a zone-less expiry as UTC, so the row keeps its controls', () => {
+    vi.stubEnv('TZ', 'Europe/Berlin'); // UTC+2: local parsing would expire it early
+    try {
+      expect(statusOf({ ...token, expires_at: '2026-09-07T01:00:00' }, now)).toBe('active');
+      expect(statusOf({ ...token, expires_at: '2026-09-06T23:00:00' }, now)).toBe('expired');
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('ranks revoked above expired above active', () => {
     expect(statusOf(token, now)).toBe('active');
     expect(statusOf({ ...token, expires_at: '2026-09-01T00:00:00Z' }, now)).toBe('expired');
@@ -233,6 +243,33 @@ describe('PersonalAccessTokenManager', () => {
     );
     expect(await screen.findByText('CI (renamed)')).toBeInTheDocument();
     expect(screen.queryByRole('form', { name: /Edit/ })).not.toBeInTheDocument();
+  });
+
+  it('does not touch the expiry of a token that has one when only the name changes', async () => {
+    // The API sends sub-second UTC; the input edits minute-precision local time.
+    // Comparing the two representations directly marked the expiry dirty on every
+    // token that had one, so a rename silently rewrote it.
+    const expiring = {
+      ...token,
+      expires_at: new Date(Date.now() + 30 * 86400000).toISOString().replace('Z', '.123456Z'),
+    };
+    api.listPATs.mockResolvedValue([expiring]);
+    api.updatePAT.mockResolvedValue({ ...expiring, name: 'CI (renamed)' });
+    render(<PersonalAccessTokenManager currentUser={currentUser} isAdmin={false} />);
+
+    await screen.findByText('CI');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+
+    const editor = screen.getByRole('form', { name: 'Edit CI' });
+    const save = within(editor).getByRole('button', { name: 'Save' });
+    expect(save).toBeDisabled(); // an untouched form is not dirty
+
+    fireEvent.change(within(editor).getByLabelText('Name'), { target: { value: 'CI (renamed)' } });
+    fireEvent.click(save);
+
+    await waitFor(() =>
+      expect(api.updatePAT).toHaveBeenCalledWith('pat-1', { name: 'CI (renamed)' }),
+    );
   });
 
   it('clears an expiry with the Never preset', async () => {

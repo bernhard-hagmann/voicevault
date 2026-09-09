@@ -11,7 +11,7 @@ import {
   User,
 } from '../types';
 import { errorFrom } from '../utils/errors';
-import { formatDateTime, formatRelative } from '../utils/format';
+import { formatDateTime, formatRelative, parseApiDate } from '../utils/format';
 import { statusOf } from '../utils/tokens';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -134,14 +134,16 @@ function TokenRowEditor({
   onSave: (changes: PersonalAccessTokenUpdate) => void;
   onCancel: () => void;
 }) {
-  const [draft, setDraft] = useState<EditState>({
-    name: pat.name,
-    expiresAt: pat.expires_at ? toLocalInputValue(new Date(pat.expires_at)) : '',
-  });
-  const nextExpiry = toApiExpiry(draft.expiresAt);
+  const initialExpiry = pat.expires_at ? toLocalInputValue(parseApiDate(pat.expires_at)) : '';
+  const [draft, setDraft] = useState<EditState>({ name: pat.name, expiresAt: initialExpiry });
   const changes: PersonalAccessTokenUpdate = {};
   if (draft.name.trim() !== pat.name) changes.name = draft.name.trim();
-  if (nextExpiry !== pat.expires_at) changes.expires_at = nextExpiry;
+  // Compare in the representation the field actually edits. Comparing the
+  // outbound ISO string against the API's own would differ for every token that
+  // has an expiry - the input is minute-precision local time, the API sends
+  // sub-second UTC - so Save would light up on an untouched form and a plain
+  // rename would silently rewrite the expiry.
+  if (draft.expiresAt !== initialExpiry) changes.expires_at = toApiExpiry(draft.expiresAt);
   const dirty = Object.keys(changes).length > 0;
 
   return (
@@ -723,7 +725,7 @@ export function PersonalAccessTokenManager({ currentUser, isAdmin }: Props) {
           <ul className={`divide-y rounded-lg border bg-white ${loading ? 'opacity-60' : ''}`}>
             {visibleTokens.map((pat) => {
               const status = statusOf(pat);
-              const expiresMs = pat.expires_at ? new Date(pat.expires_at).getTime() : null;
+              const expiresMs = pat.expires_at ? parseApiDate(pat.expires_at).getTime() : null;
               const expiringSoon =
                 status === 'active' &&
                 expiresMs !== null &&

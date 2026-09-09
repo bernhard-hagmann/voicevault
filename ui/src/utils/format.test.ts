@@ -1,5 +1,12 @@
-import { describe, expect, it } from 'vitest';
-import { formatBytes, formatCount, formatDateTime, formatHours, formatRelative } from './format';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  formatBytes,
+  formatCount,
+  formatDateTime,
+  formatHours,
+  formatRelative,
+  parseApiDate,
+} from './format';
 
 describe('formatBytes', () => {
   it('renders zero and negatives as 0 B', () => {
@@ -59,6 +66,34 @@ describe('formatCount', () => {
   it('groups thousands', () => {
     expect(formatCount(1234567)).toBe('1,234,567');
     expect(formatCount(0)).toBe('0');
+  });
+});
+
+describe('parseApiDate', () => {
+  // The bug only shows away from UTC, which is where the suite otherwise runs.
+  beforeAll(() => {
+    vi.stubEnv('TZ', 'Europe/Berlin'); // UTC+2 on the dates below
+  });
+  afterAll(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('reads a zone-less timestamp as UTC rather than as local time', () => {
+    expect(parseApiDate('2026-10-04T12:00:00').toISOString()).toBe('2026-10-04T12:00:00.000Z');
+    expect(parseApiDate('2026-10-04T12:00:00.123456').toISOString()).toBe(
+      '2026-10-04T12:00:00.123Z',
+    );
+  });
+
+  it('leaves an explicit zone alone', () => {
+    expect(parseApiDate('2026-10-04T12:00:00Z').toISOString()).toBe('2026-10-04T12:00:00.000Z');
+    expect(parseApiDate('2026-10-04T14:00:00+02:00').toISOString()).toBe(
+      '2026-10-04T12:00:00.000Z',
+    );
+  });
+
+  it('stays invalid for garbage instead of inventing an instant', () => {
+    expect(Number.isNaN(parseApiDate('not a date').getTime())).toBe(true);
   });
 });
 

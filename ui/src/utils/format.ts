@@ -42,6 +42,15 @@ export const formatHours = (seconds: number): string => {
 export const formatCount = (value: number): string =>
   Number.isFinite(value) ? value.toLocaleString('en-US') : '0';
 
+// A date-time with no zone designator, e.g. "2026-10-04T12:00:00".
+const ZONELESS = /^\d{4}-\d{2}-\d{2}T[\d:.]+$/;
+
+// The API stores naive UTC. It now marks the zone on the way out, but a build
+// that does not would hand us a zone-less string, and ECMAScript reads that as
+// *local* time - shifting every timestamp by the reader's UTC offset. Read it
+// as the UTC it has always been. Anything already zoned is left alone.
+export const parseApiDate = (iso: string): Date => new Date(ZONELESS.test(iso) ? `${iso}Z` : iso);
+
 const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ['year', 365 * 24 * 3600 * 1000],
   ['month', 30 * 24 * 3600 * 1000],
@@ -52,7 +61,7 @@ const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
 
 // "in 12 days" / "3 hours ago" / "just now". Fixed locale, like formatCount.
 export const formatRelative = (iso: string, now: number = Date.now()): string => {
-  const delta = new Date(iso).getTime() - now;
+  const delta = parseApiDate(iso).getTime() - now;
   if (!Number.isFinite(delta)) {
     return '';
   }
@@ -67,7 +76,7 @@ export const formatRelative = (iso: string, now: number = Date.now()): string =>
 
 // Exact instant in the viewer's zone, e.g. "Dec 1, 2026, 10:30 AM".
 export const formatDateTime = (iso: string): string => {
-  const date = new Date(iso);
+  const date = parseApiDate(iso);
   return Number.isNaN(date.getTime())
     ? ''
     : date.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });

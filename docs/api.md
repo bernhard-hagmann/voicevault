@@ -4,6 +4,10 @@ Base URL: `http://localhost:8000` (development)
 
 Interactive documentation is available at `/api/docs` (Swagger UI) and `/api/redoc`.
 
+Every timestamp in a response is UTC and carries an explicit `Z`, e.g.
+`"2026-10-04T12:00:00Z"`. Inbound timestamps may carry any offset; they are
+converted to UTC on the way in.
+
 ## Authentication
 
 Authentication is optional. When `ACCESS_TOKEN` is set, all API requests must include:
@@ -323,7 +327,7 @@ Owner only. `status` accepts `pending` (default), `approved`, `denied`, or `all`
     "display_name": "Bob Miller",
     "status": "pending",
     "message": "I'm joining the QBR team",
-    "created_at": "2026-08-20T10:00:00",
+    "created_at": "2026-08-20T10:00:00Z",
     "decided_at": null,
     "decided_by_name": null
   }
@@ -438,8 +442,8 @@ are resolved through a whitelist and never interpolated into SQL.
       "display_name": "Ada Lovelace",
       "is_admin": true,
       "is_system": false,
-      "created_at": "2026-01-15T09:30:00",
-      "last_login_at": "2026-08-20T08:12:00",
+      "created_at": "2026-01-15T09:30:00Z",
+      "last_login_at": "2026-08-20T08:12:00Z",
       "entry_count": 42,
       "storage_bytes": 1073741824,
       "duration_seconds": 54000.0,
