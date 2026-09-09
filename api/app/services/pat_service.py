@@ -237,24 +237,39 @@ class PATService:
     def touch_last_used(self, pat: PersonalAccessToken) -> bool:
         """Record usage, at most once per LAST_USED_WRITE_INTERVAL.
 
-        Call this only after the request has been authorized: denied requests
-        must not show up as token activity. The write goes through a separate
-        connection so the request-scoped session is not committed (and its
-        loaded objects not expired) in the middle of authentication.
+        Call this only once the token itself has been authorized, so that a
+        probe refused by _enforce_pat_permission - a missing scope, the admin
+        area, an interactive-only route - leaves no trace of activity. A request
+        that clears the token gate and is then refused on the resource (someone
+        else's entry, say) does still count: the caller held a usable token, and
+        per-object checks live in the routes, past this point.
+
+        The write goes through a separate connection so the request-scoped
+        session is not committed (and its loaded objects not expired) in the
+        middle of authentication.
         """
 
         now = utcnow()
-        if (
-            pat.last_used_at is not None
-            and pat.last_used_at > now - LAST_USED_WRITE_INTERVAL
-        ):
+        cutoff = now - LAST_USED_WRITE_INTERVAL
+        if pat.last_used_at is not None and pat.last_used_at > cutoff:
             return False
+        # The cutoff is repeated in the UPDATE so the interval holds under load:
+        # concurrent requests all read the same stale value, and without it they
+        # would all write. The loser sees rowcount 0 and leaves the row alone.
         with self.db.get_bind().begin() as connection:
-            connection.execute(
+            written = connection.execute(
                 update(PersonalAccessToken)
-                .where(PersonalAccessToken.id == pat.id)
+                .where(
+                    PersonalAccessToken.id == pat.id,
+                    or_(
+                        PersonalAccessToken.last_used_at.is_(None),
+                        PersonalAccessToken.last_used_at <= cutoff,
+                    ),
+                )
                 .values(last_used_at=now),
-            )
+            ).rowcount
+        if not written:
+            return False
         set_committed_value(pat, "last_used_at", now)
         return True
 

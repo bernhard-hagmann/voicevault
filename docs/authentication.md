@@ -45,7 +45,7 @@ rules still apply. Each token also needs the permission required by the route:
 | `projects:write` | Create/update projects, membership, and access requests |
 | `templates:read` | List prompt templates |
 | `templates:write` | Create, update, and delete prompt templates |
-| `admin:read` | Read admin endpoints, only when the owning user is also an admin |
+| `admin:read` | `GET /api/admin/stats` and `GET /api/admin/users`, and only when the owning user is also an admin |
 
 A missing, malformed, unknown, expired, or revoked PAT returns `401`. A valid
 PAT without the required permission returns `403`, except on `/api/admin`,
@@ -57,9 +57,12 @@ invalidates their sessions and revokes all of their PATs in one step, and a
 deactivated user's next SSO attempt is refused before it can be recorded as a
 login.
 
-`last_used_at` is updated at most every five minutes and only for requests that
-were actually authorized, so a leaked token that is being probed against routes
-it cannot access does not appear "in use".
+`last_used_at` is updated at most every five minutes, and only once the token
+itself has been authorized, so a leaked token being probed against routes it
+cannot reach does not appear "in use". A request that clears the token gate and
+is then refused on the resource - someone else's entry, say - does count: the
+caller held a credential that works. The five-minute interval is enforced in the
+`UPDATE` itself, so concurrent requests cannot each slip a write past it.
 
 In OIDC mode a bearer header that does not start with `vvpat_` is ignored and
 the session cookie is used instead. This lets a browser that still holds a

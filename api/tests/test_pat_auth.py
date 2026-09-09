@@ -144,6 +144,31 @@ class PATServiceTests(TestCase):
 
         db.get_bind.assert_not_called()
 
+    def test_touch_last_used_carries_the_interval_into_the_update(self):
+        # The in-memory check cannot hold the interval on its own: concurrent
+        # requests read the same stale value, so the predicate has to be in SQL.
+        db = MagicMock()
+        pat = SimpleNamespace(id=uuid4(), last_used_at=None)
+
+        with patch("app.services.pat_service.set_committed_value"):
+            PATService(db).touch_last_used(pat)
+
+        connection = db.get_bind.return_value.begin.return_value.__enter__.return_value
+        statement = str(connection.execute.call_args.args[0])
+        self.assertIn("last_used_at IS NULL", statement)
+        self.assertIn("last_used_at <=", statement)
+
+    def test_touch_last_used_yields_to_the_request_that_won_the_race(self):
+        db = MagicMock()
+        pat = SimpleNamespace(id=uuid4(), last_used_at=None)
+        connection = db.get_bind.return_value.begin.return_value.__enter__.return_value
+        connection.execute.return_value.rowcount = 0
+
+        with patch("app.services.pat_service.set_committed_value") as set_value:
+            self.assertFalse(PATService(db).touch_last_used(pat))
+
+        set_value.assert_not_called()
+
     def test_revoke_scopes_to_owner_only_when_asked(self):
         db = MagicMock()
         query = db.query.return_value.filter.return_value
@@ -313,20 +338,37 @@ class PATAuthenticationTests(TestCase):
     @patch.object(auth_module.settings, "auth_mode", AuthMode.OIDC)
     @patch("app.core.auth.PATService")
     def test_non_admin_pat_on_admin_path_gets_404_whatever_its_scopes(self, service):
-        # Without admin:read the scope gate answers; with it require_admin does.
-        # Both say 404 so the admin area stays undiscoverable to non-admins.
-        self.assertEqual(self._status(service, [], "/api/admin/stats", "GET"), 404)
+        # admin:read can be attached to anyone's token, so the scope alone never
+        # settles it. Answering here rather than leaving it to require_admin
+        # keeps the admin area undiscoverable *and* keeps a probe that was going
+        # to be refused out of the token's usage record.
+        for permissions in ([], [PATPermission.ADMIN_READ.value]):
+            with self.subTest(permissions=permissions):
+                self.assertEqual(
+                    self._status(service, permissions, "/api/admin/stats", "GET"),
+                    404,
+                )
+                service.return_value.touch_last_used.assert_not_called()
 
-        user = self._authenticate(
-            service,
-            [PATPermission.ADMIN_READ.value],
-            "/api/admin/stats",
-            "GET",
-        )
-        with patch("app.core.auth.is_admin_user", return_value=False):
-            with self.assertRaises(HTTPException) as caught:
-                auth_module.require_admin(user)
-        self.assertEqual(caught.exception.status_code, 404)
+    @patch.object(auth_module.settings, "auth_mode", AuthMode.OIDC)
+    @patch("app.core.auth.PATService")
+    def test_interactive_only_admin_reads_never_count_as_usage(self, service):
+        # These two manage credentials rather than report on them, so their
+        # routes require an interactive login. Refusing at the token gate means
+        # the rejection happens before touch_last_used, not after it.
+        for path in ("/api/admin/pats", "/api/admin/pat-users"):
+            with self.subTest(path=path):
+                self.assertEqual(
+                    self._status(
+                        service,
+                        [PATPermission.ADMIN_READ.value],
+                        path,
+                        "GET",
+                        is_admin=True,
+                    ),
+                    403,
+                )
+                service.return_value.touch_last_used.assert_not_called()
 
     @patch.object(auth_module.settings, "auth_mode", AuthMode.OIDC)
     @patch("app.core.auth.PATService")

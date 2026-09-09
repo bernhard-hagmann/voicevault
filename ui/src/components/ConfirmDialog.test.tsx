@@ -6,7 +6,7 @@ import { ConfirmDialog } from './ConfirmDialog';
 const renderDialog = (overrides: Partial<React.ComponentProps<typeof ConfirmDialog>> = {}) => {
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
-  render(
+  const view = render(
     <ConfirmDialog
       open
       title="Delete it?"
@@ -17,7 +17,7 @@ const renderDialog = (overrides: Partial<React.ComponentProps<typeof ConfirmDial
       {...overrides}
     />,
   );
-  return { onConfirm, onCancel };
+  return { onConfirm, onCancel, ...view };
 };
 
 describe('ConfirmDialog', () => {
@@ -41,6 +41,33 @@ describe('ConfirmDialog', () => {
     fireEvent.click(screen.getByRole('dialog').parentElement as HTMLElement);
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(onCancel).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps Tab inside the dialog in both directions', () => {
+    renderDialog();
+    const cancel = screen.getByRole('button', { name: 'Cancel' });
+    const confirm = screen.getByRole('button', { name: 'Delete' });
+
+    // Cancel is first and Delete last, so wrapping is the only way round.
+    expect(cancel).toHaveFocus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+    expect(confirm).toHaveFocus();
+
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(cancel).toHaveFocus();
+  });
+
+  it('returns focus to whatever opened it', () => {
+    const opener = document.createElement('button');
+    document.body.appendChild(opener);
+    opener.focus();
+
+    const { unmount } = renderDialog();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+
+    unmount();
+    expect(opener).toHaveFocus();
+    opener.remove();
   });
 
   it('ignores dismissal while busy', () => {

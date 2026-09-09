@@ -385,9 +385,10 @@ to PATs outright, so a new router must be added there before PATs can call it.
 In `none`/`token` mode the single shared local user is the admin, so this works with no
 extra configuration. In `oidc` mode the caller's email must appear in `ADMIN_EMAILS`
 (comma-separated); everyone else gets 404, never 403 - including a non-admin's PAT,
-whatever its scopes. Changing `ADMIN_EMAILS` requires an API restart. The read
-endpoints accept an admin's PAT with `admin:read`; the mutations require an interactive
-login.
+whatever its scopes. Changing `ADMIN_EMAILS` requires an API restart. `GET /api/admin/stats`
+and `GET /api/admin/users` accept an admin's PAT with `admin:read`; every mutation and
+the two PAT-management reads require an interactive login, and a PAT is refused there
+while its token is resolved, so a denied probe never lands in `last_used_at`.
 - `GET /api/admin/stats` - Platform totals: users (total/active 30d/new 30d), entries by status and source, archived count, storage bytes, duration seconds, words, projects, `entries_missing_metrics`, `entries_unassigned`
 - `GET /api/admin/users` - Per-user consumption (`?skip=0&limit=50&sort=storage_bytes&order=desc`)
   - `sort`: `entry_count|storage_bytes|duration_seconds|word_count|email|created_at` (anything else returns 400)

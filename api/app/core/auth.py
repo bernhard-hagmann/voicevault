@@ -60,6 +60,12 @@ _PAT_SCOPES: dict[str, tuple[PATPermission, PATPermission | None]] = {
 }
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
+# Admin reads that manage credentials rather than report on them. Their routes
+# depend on require_interactive_auth, so a PAT can never satisfy them; listing
+# them here refuses the call while resolving the token instead of after, which
+# keeps a denied probe out of the token's usage record.
+_PAT_INTERACTIVE_ONLY = ("/api/admin/pats", "/api/admin/pat-users")
+
 
 class _PATDenied(Exception):
     """The route is not available to PATs at all (no scope could grant it)."""
@@ -74,6 +80,9 @@ def _required_pat_permission(method: str, path: str) -> str | None:
 
     if (method, path.rstrip("/")) in _PAT_UNSCOPED_ROUTES:
         return None
+    for prefix in _PAT_INTERACTIVE_ONLY:
+        if path == prefix or path.startswith(prefix + "/"):
+            raise _PATDenied()
     for prefix, (read_scope, write_scope) in _PAT_SCOPES.items():
         if path == prefix or path.startswith(prefix + "/"):
             is_read = method in _READ_METHODS or (
@@ -97,6 +106,11 @@ def _enforce_pat_permission(request: Request, pat, user) -> None:
         allowed = False
     else:
         allowed = required is None or required in set(pat.permissions or [])
+        # A scope never outranks its owner. require_admin would refuse this
+        # anyway, but only after get_current_user has already recorded the call
+        # as usage - and admin:read can be attached to any user's token.
+        if allowed and path.startswith("/api/admin") and not is_admin_user(user):
+            allowed = False
     if allowed:
         return
 

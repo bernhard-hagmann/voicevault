@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Copy, KeyRound, Pencil, X } from 'lucide-react';
 
 import { adminApi, authApi } from '../services/api';
@@ -276,6 +276,10 @@ export function PersonalAccessTokenManager({ currentUser, isAdmin }: Props) {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  // A monotonic id rather than a per-effect flag: a write refetches by calling
+  // refresh() straight away, and that call has to be ordered against the
+  // effect-driven ones too, not only against other writes.
+  const requestId = useRef(0);
 
   // --- admin-only scope ---
   const [scope, setScope] = useState<Scope>('mine');
@@ -286,34 +290,50 @@ export function PersonalAccessTokenManager({ currentUser, isAdmin }: Props) {
 
   const visiblePermissions = PERMISSIONS.filter((p) => isAdmin || !p.adminOnly);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (isAdmin) {
-        const result = await adminApi.getPATs({
-          userId: scope === 'mine' ? currentUser.id : (userFilter?.id ?? undefined),
-          name: debouncedName || undefined,
-          status: statusFilter === 'all' ? undefined : statusFilter,
-          page,
-          perPage: PAGE_SIZE,
-        });
-        setTokens(result.tokens);
-        setTotal(result.total);
-        setTotalPages(result.total_pages);
-      } else {
-        setTokens(await authApi.listPATs());
+  // `isStale` lets a superseded request drop its result instead of overwriting a
+  // newer one - the filters, the scope and the heading all move together, so a
+  // late response would otherwise show one user's rows under another's title.
+  const load = useCallback(
+    async (isStale: () => boolean) => {
+      setLoading(true);
+      try {
+        if (isAdmin) {
+          const result = await adminApi.getPATs({
+            userId: scope === 'mine' ? currentUser.id : (userFilter?.id ?? undefined),
+            name: debouncedName || undefined,
+            status: statusFilter === 'all' ? undefined : statusFilter,
+            page,
+            perPage: PAGE_SIZE,
+          });
+          if (isStale()) return;
+          setTokens(result.tokens);
+          setTotal(result.total);
+          setTotalPages(result.total_pages);
+        } else {
+          const rows = await authApi.listPATs();
+          if (isStale()) return;
+          setTokens(rows);
+        }
+        setError(null);
+      } catch (err) {
+        if (isStale()) return;
+        setError(errorFrom(err, 'Could not load tokens.'));
+      } finally {
+        // The newer request owns the spinner; a stale one must not clear it.
+        if (!isStale()) setLoading(false);
       }
-      setError(null);
-    } catch (err) {
-      setError(errorFrom(err, 'Could not load tokens.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [isAdmin, currentUser.id, scope, userFilter?.id, debouncedName, statusFilter, page]);
+    },
+    [isAdmin, currentUser.id, scope, userFilter?.id, debouncedName, statusFilter, page],
+  );
+
+  const refresh = useCallback(() => {
+    const id = (requestId.current += 1);
+    return load(() => id !== requestId.current);
+  }, [load]);
 
   useEffect(() => {
-    load();
-  }, [load]);
+    refresh();
+  }, [refresh]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedName(nameFilter.trim()), 300);
@@ -394,7 +414,7 @@ export function PersonalAccessTokenManager({ currentUser, isAdmin }: Props) {
       }
       setStatusFilter('active');
       setPage(1);
-      await load();
+      refresh();
     } catch (err) {
       setError(errorFrom(err, 'Could not create the token.'));
     } finally {
@@ -408,7 +428,7 @@ export function PersonalAccessTokenManager({ currentUser, isAdmin }: Props) {
     try {
       await (isAdmin ? adminApi.revokePAT(revoking.id) : authApi.revokePAT(revoking.id));
       setRevoking(null);
-      await load();
+      refresh();
     } catch (err) {
       setError(errorFrom(err, 'Could not revoke the token.'));
       setRevoking(null);

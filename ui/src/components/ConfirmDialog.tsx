@@ -24,12 +24,43 @@ export function ConfirmDialog({
   onCancel,
 }: Props) {
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Focus moves in on open and back out on close. Kept apart from the key
+  // handler below so a `busy` flip re-registers the listener without yanking
+  // focus around mid-action.
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    cancelRef.current?.focus();
+    return () => previouslyFocused?.focus?.();
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
-    cancelRef.current?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) onCancel();
+      if (event.key === 'Escape' && !busy) {
+        onCancel();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialogRef.current) return;
+      // aria-modal tells assistive tech the page behind is unavailable, so Tab
+      // must not walk into it either. Query on every press: the confirm button
+      // changes label and disabled state while busy.
+      const focusable = Array.from(
+        dialogRef.current.querySelectorAll<HTMLElement>(
+          'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ),
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      const outside = !dialogRef.current.contains(active);
+      if (event.shiftKey ? active === first || outside : active === last || outside) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+      }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
@@ -43,6 +74,7 @@ export function ConfirmDialog({
       onClick={() => !busy && onCancel()}
     >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby="confirm-dialog-title"

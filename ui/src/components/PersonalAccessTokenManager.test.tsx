@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { formatDateTime } from '../utils/format';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -251,7 +251,7 @@ describe('PersonalAccessTokenManager', () => {
     // token that had one, so a rename silently rewrote it.
     const expiring = {
       ...token,
-      expires_at: new Date(Date.now() + 30 * 86400000).toISOString().replace('Z', '.123456Z'),
+      expires_at: new Date(Date.now() + 30 * 86400000).toISOString().replace(/\.\d+Z$/, '.123456Z'),
     };
     api.listPATs.mockResolvedValue([expiring]);
     api.updatePAT.mockResolvedValue({ ...expiring, name: 'CI (renamed)' });
@@ -286,6 +286,34 @@ describe('PersonalAccessTokenManager', () => {
 
     await waitFor(() => expect(api.updatePAT).toHaveBeenCalledWith('pat-1', { expires_at: null }));
     expect(await screen.findByText('Never expires')).toBeInTheDocument();
+  });
+
+  it('drops a superseded response instead of overwriting the newer rows', async () => {
+    const mine = { ...emptyPage, tokens: [token], total: 1, total_pages: 1 };
+    const all = {
+      ...emptyPage,
+      tokens: [{ ...token, id: 'pat-9', name: 'Grace key' }],
+      total: 1,
+      total_pages: 1,
+    };
+    let releaseFirst: (value: typeof mine) => void = () => {};
+    admin.getPATs
+      .mockImplementationOnce(() => new Promise((resolve) => (releaseFirst = resolve)))
+      .mockResolvedValueOnce(all);
+
+    render(<PersonalAccessTokenManager currentUser={adminUser} isAdmin />);
+    fireEvent.click(screen.getByRole('button', { name: 'All tokens' }));
+
+    expect(await screen.findByText('Grace key')).toBeInTheDocument();
+
+    // The request for the old scope answers last. Its rows belong to a heading
+    // and a filter that are no longer on screen, so they must be discarded.
+    await act(async () => {
+      releaseFirst(mine);
+    });
+
+    expect(screen.getByText('Grace key')).toBeInTheDocument();
+    expect(screen.queryByText('CI')).not.toBeInTheDocument();
   });
 
   it('does not offer to edit other users tokens or inactive ones', async () => {
